@@ -12,6 +12,7 @@ Static GitHub Pages app for demonstrating line-by-line optical pulse shaping wit
 - Editable amplitude and phase controls for every active line
 - Plotly-based input spectrum, 3D phasor view, and time-domain intensity envelope
 - Intensity-focused presets for sawtooth-like, reverse-sawtooth-like, triangle-like, and square-like targets
+- Improved sawtooth/reverse-sawtooth presets using precomputed finite-line spectral-factor fits for 4, 8, 12, and 16 lines
 - Amplitude-shaping presets: ramped, center-weighted, edge-weighted, notched, and alternating strong/weak line amplitudes
 - Compact horizontal desktop layout for seeing controls and plots at once
 - JSON export for the current line settings
@@ -29,7 +30,7 @@ No Python backend is required. Plotly is loaded from a CDN in `index.html`.
 
 ## Notes
 
-The app synthesizes the complex optical envelope using equal frequency spacing. The plotted waveform is the intensity envelope `|E(t)|²`, not the raw optical carrier field. With more active lines, discontinuous targets such as square and sawtooth waveforms are approximated more faithfully, though finite-bandwidth smoothing and ringing remain visible.
+The app synthesizes the complex optical envelope using equal frequency spacing. The plotted waveform is the intensity envelope `|E(t)|²`, not the raw optical carrier field. With more active lines, discontinuous targets such as square and sawtooth waveforms are approximated more faithfully, though finite-bandwidth smoothing and ringing remain visible. The sawtooth and reverse-sawtooth presets are not smoothed targets; they use better precomputed coefficients for the same discontinuous target.
 
 ## Interaction notes
 
@@ -38,3 +39,7 @@ The amplitude, phase, time-window, and phasor-time sliders update the plots live
 ## v7 layout note
 
 The interpretation notes now sit directly below the waveform plot inside the plot column. The preset panel and waveform panel have colored visual emphasis, and the waveform plot uses consistent colors for synthesized intensity, preset target, and phasor snapshot time.
+
+## v8 preset note
+
+The sawtooth and reverse-sawtooth presets were updated from the earlier square-root-field fit to finite-line spectral-factor coefficients. Typical normalized sawtooth RMSE values are now about `0.079` for 8 lines and `0.061` for 16 lines with the app target definition.

@@ -11,6 +11,46 @@ const PLOT_COLORS = {
   spectrum: '#8a5cf6',
 };
 
+
+const OPTIMIZED_INTENSITY_PRESETS = {
+  intensity_saw: {
+    4: {
+      magnitudes: [1.000000, 0.353500, 0.182200, 0.112400],
+      phasesDeg: [-90.0100, 13.8100, 12.2200, 0.0000],
+    },
+    8: {
+      magnitudes: [1.000000, 0.366300, 0.194500, 0.136000, 0.104800, 0.083800, 0.067000, 0.050000],
+      phasesDeg: [-90.0200, 20.5900, 28.0700, 29.8600, 28.0300, 23.1800, 14.8200, 0.0000],
+    },
+    12: {
+      magnitudes: [1.000000, 0.372700, 0.198500, 0.140300, 0.110500, 0.091500, 0.077900, 0.067200, 0.058100, 0.050000, 0.042000, 0.032400],
+      phasesDeg: [-90.0300, 23.4700, 34.0600, 39.2400, 41.2100, 41.0000, 39.1300, 35.8300, 31.1000, 24.5900, 15.3100, 0.0000],
+    },
+    16: {
+      magnitudes: [1.000000, 0.359700, 0.187300, 0.131900, 0.104900, 0.088700, 0.077500, 0.068900, 0.062000, 0.056000, 0.050600, 0.045600, 0.040800, 0.035900, 0.030700, 0.024000],
+      phasesDeg: [-91.2000, 25.7800, 39.4200, 47.7100, 52.5700, 54.9700, 55.5200, 54.6400, 52.6000, 49.5600, 45.5700, 40.6200, 34.5000, 26.7700, 16.3700, 0.0000],
+    },
+  },
+  intensity_reverse_saw: {
+    4: {
+      magnitudes: [1.000000, 0.353500, 0.182200, 0.112400],
+      phasesDeg: [89.9900, -13.8200, -12.2300, 0.0000],
+    },
+    8: {
+      magnitudes: [1.000000, 0.366200, 0.194500, 0.136000, 0.104800, 0.083800, 0.067000, 0.050000],
+      phasesDeg: [89.9800, -20.6200, -28.0900, -29.8800, -28.0400, -23.1900, -14.8200, 0.0000],
+    },
+    12: {
+      magnitudes: [1.000000, 0.372600, 0.198500, 0.140300, 0.110400, 0.091500, 0.077900, 0.067100, 0.058100, 0.050000, 0.041900, 0.032400],
+      phasesDeg: [89.9700, -23.5200, -34.1000, -39.2700, -41.2400, -41.0200, -39.1500, -35.8500, -31.1100, -24.6000, -15.3100, 0.0000],
+    },
+    16: {
+      magnitudes: [1.000000, 0.359700, 0.187300, 0.131900, 0.104900, 0.088700, 0.077500, 0.068900, 0.062000, 0.056000, 0.050600, 0.045600, 0.040800, 0.035900, 0.030700, 0.024000],
+      phasesDeg: [91.1200, -25.8500, -39.4900, -47.7800, -52.6300, -55.0100, -55.5600, -54.6800, -52.6300, -49.5800, -45.6000, -40.6300, -34.5100, -26.7800, -16.3700, 0.0000],
+    },
+  },
+};
+
 const state = {
   lineCount: DEFAULT_LINE_COUNT,
   amplitudes: Array(MAX_LINES).fill(1.0),
@@ -586,6 +626,19 @@ function makeAlternatingAmplitudePattern(nLines = state.lineCount) {
 }
 
 function intensityTargetPreset(kind, label) {
+  const optimized = OPTIMIZED_INTENSITY_PRESETS[kind]?.[state.lineCount];
+  if (optimized) {
+    return {
+      magnitudes: optimized.magnitudes.slice(),
+      phasesDeg: optimized.phasesDeg.slice(),
+      note: `<strong>Optimized intensity target: ${label}.</strong> This uses a finite-line spectral-factor fit to the actual discontinuous target, with no smoothing. Residual error is mostly the ${state.lineCount}-line bandwidth limit.`,
+      targetKind: kind,
+      targetType: 'intensity',
+      targetLabel: `${label} intensity target`,
+      family: 'intensity',
+    };
+  }
+
   const coeff = coefficientsForTarget(kind, 'intensity', state.lineCount);
   const { magnitudes, phasesDeg } = coeffToMagnitudePhase(coeff, state.lineCount);
   return {
