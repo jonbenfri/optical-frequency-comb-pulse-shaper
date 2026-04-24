@@ -347,14 +347,29 @@ function makePhasorPlot(synth, controls) {
   });
 
   const layout = {
-    margin: { l: 0, r: 0, t: 24, b: 0 },
+    margin: { l: 18, r: 34, t: 38, b: 28 },
     scene: {
-      xaxis: { title: 'Frequency offset (GHz)' },
-      yaxis: { title: 'In-phase', range: [-1.25 * maxMag, 1.25 * maxMag] },
-      zaxis: { title: 'Quadrature', range: [-1.25 * maxMag, 1.25 * maxMag] },
-      camera: { eye: { x: 1.5, y: -1.7, z: 1.1 } },
+      xaxis: {
+        title: { text: 'Freq. offset<br>(GHz)', font: { size: 11 } },
+        tickfont: { size: 10 },
+      },
+      yaxis: {
+        title: { text: 'In-phase', font: { size: 11 } },
+        tickfont: { size: 10 },
+        range: [-1.25 * maxMag, 1.25 * maxMag],
+      },
+      zaxis: {
+        title: { text: 'Quadrature', font: { size: 11 } },
+        tickfont: { size: 10 },
+        range: [-1.25 * maxMag, 1.25 * maxMag],
+      },
+      camera: { eye: { x: 1.55, y: -1.75, z: 1.15 } },
     },
-    title: { text: `Phasors at t = ${phasorTimePs.toFixed(3)} ps = ${controls.phasorTOverT.toFixed(2)}T`, font: { size: 14 } },
+    title: {
+      text: `Phasors at t = ${phasorTimePs.toFixed(3)} ps = ${controls.phasorTOverT.toFixed(2)}T`,
+      font: { size: 13 },
+      y: 0.97,
+    },
   };
   Plotly.react('phasorPlot', traces, layout, plotConfig());
 }

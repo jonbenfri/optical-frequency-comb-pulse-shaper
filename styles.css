@@ -260,7 +260,7 @@ button.secondary:hover { background: #dfe6ff; }
 
 .plot-panel {
   padding: 12px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .plot-panel h3 { margin-bottom: 4px; }
@@ -269,6 +269,7 @@ button.secondary:hover { background: #dfe6ff; }
 
 .plot { width: 100%; }
 .plot-small { min-height: 315px; }
+.plot-phasor { min-height: 370px; }
 .plot-large { min-height: 385px; }
 
 .math {
@@ -305,6 +306,7 @@ footer {
 @media (max-width: 1280px) {
   .app-grid { grid-template-columns: 1fr; }
   .plot-small { min-height: 340px; }
+  .plot-phasor { min-height: 390px; }
   .plot-large { min-height: 430px; }
 }
 
@@ -323,5 +325,6 @@ footer {
     grid-template-columns: 30px minmax(0, 1fr) 72px;
   }
   .plot-small { min-height: 320px; }
+  .plot-phasor { min-height: 360px; }
   .plot-large { min-height: 380px; }
 }

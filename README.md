@@ -29,3 +29,7 @@ No Python backend is required. Plotly is loaded from a CDN in `index.html`.
 ## Notes
 
 The app synthesizes the complex optical envelope using equal frequency spacing. The plotted waveform is the intensity envelope `|E(t)|²`, not the raw optical carrier field. With only eight lines, discontinuous targets such as square and sawtooth waveforms will show finite-bandwidth smoothing and ringing.
+
+## v4 layout note
+
+The 3D phasor plot has extra margins, a slightly taller panel, and shortened axis labels so labels are not clipped on GitHub Pages.
