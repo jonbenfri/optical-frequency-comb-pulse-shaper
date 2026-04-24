@@ -1,62 +1,29 @@
 # Interactive Optical Pulse Shaping
 
-A static GitHub Pages web app for demonstrating line-by-line optical pulse shaping with eight equal-frequency-spaced CW laser lines near 1550 nm.
+Static GitHub Pages app for demonstrating line-by-line optical pulse shaping with 8 equal-frequency-spaced CW laser inputs.
 
-The app lets you adjust each line's amplitude and phase, apply presets, and view:
+## Features
 
-- the input comb spectrum,
-- a 3D phasor representation of the line phases,
-- the synthesized periodic time-domain field/intensity envelope.
+- 8 laser lines centered around an editable center wavelength, default `1550.0 nm`
+- Comb spacing selector: `20`, `50`, `100`, and `200 GHz`
+- Editable amplitude and phase controls for every line
+- Plotly-based input spectrum, 3D phasor view, and time-domain intensity envelope
+- Intensity-focused presets for sawtooth-like, reverse-sawtooth-like, triangle-like, and square-like targets
+- Chirped spectral-phase presets
+- Compact horizontal desktop layout for seeing controls and plots at once
+- JSON export for the current line settings
 
-## Files
+## Deploy with GitHub Pages
 
-```text
-index.html
-styles.css
-script.js
-.nojekyll
-.github/workflows/pages.yml   # optional GitHub Actions deployment workflow
-```
+The simplest deployment is to put these files at the root of a repository and enable GitHub Pages from the repository settings.
 
-The site uses Plotly from a CDN, so the browser needs internet access when loading the page.
+1. Copy `index.html`, `styles.css`, `script.js`, `.nojekyll`, and optionally `.github/workflows/pages.yml` into your repository.
+2. Commit and push.
+3. In GitHub, open **Settings → Pages**.
+4. Choose either branch deployment from the root directory, or use the included GitHub Actions workflow.
 
-## Run locally
+No Python backend is required. Plotly is loaded from a CDN in `index.html`.
 
-Because this is a static site, you can open `index.html` directly in a browser. A local server is also fine:
+## Notes
 
-```bash
-python -m http.server 8000
-```
-
-Then open `http://localhost:8000`.
-
-## Deploy with GitHub Pages, simple branch method
-
-1. Create a new repository, for example `pulse-shaping-demo`.
-2. Copy these files into the repository root.
-3. Commit and push to `main`.
-4. In GitHub, go to **Settings → Pages**.
-5. Under **Build and deployment**, choose **Deploy from a branch**.
-6. Select `main` and `/(root)`, then save.
-
-The site will appear at:
-
-```text
-https://<your-username>.github.io/<repo-name>/
-```
-
-## Deploy with GitHub Actions instead
-
-This package also includes `.github/workflows/pages.yml`. To use it:
-
-1. In **Settings → Pages**, set **Source** to **GitHub Actions**.
-2. Push to `main`.
-3. The workflow uploads the repository root as a static Pages artifact and deploys it.
-
-The branch method is simpler for this no-build site. The Actions method is useful if you later add a build step.
-
-## Notes on the presets
-
-- Field presets target `Re{E(t)}` in a line-index/Fourier-series reference frame.
-- Intensity presets target the measurable `|E(t)|²`.
-- With only eight lines, discontinuous targets such as square and sawtooth waves show finite-bandwidth ringing and rounded edges.
+The app synthesizes the complex optical envelope using equal frequency spacing. The plotted waveform is the intensity envelope `|E(t)|²`, not the raw optical carrier field. With only eight lines, discontinuous targets such as square and sawtooth waveforms will show finite-bandwidth smoothing and ringing.

@@ -2,9 +2,7 @@
 
 const C0 = 299_792_458.0;
 const N_LINES = 8;
-const CENTER_WAVELENGTH_NM = 1550.0;
-const CENTER_WAVELENGTH_M = CENTER_WAVELENGTH_NM * 1e-9;
-const CENTER_FREQ_HZ = C0 / CENTER_WAVELENGTH_M;
+const DEFAULT_CENTER_WAVELENGTH_NM = 1550.0;
 const lineIndices = Array.from({ length: N_LINES }, (_, k) => k);
 const centeredIndices = lineIndices.map(k => k - (N_LINES - 1) / 2);
 
@@ -71,10 +69,11 @@ function rmseNormalized(values, target) {
   return Math.sqrt(mse);
 }
 
-function combFrequencies(spacingGhz) {
+function combFrequencies(spacingGhz, centerWavelengthNm = DEFAULT_CENTER_WAVELENGTH_NM) {
   const spacingHz = spacingGhz * 1e9;
+  const centerFreqHz = C0 / (centerWavelengthNm * 1e-9);
   const offsetsHz = centeredIndices.map(idx => idx * spacingHz);
-  const freqsHz = offsetsHz.map(offset => CENTER_FREQ_HZ + offset);
+  const freqsHz = offsetsHz.map(offset => centerFreqHz + offset);
   const wavelengthsNm = freqsHz.map(freq => C0 / freq * 1e9);
   const periodPs = 1e12 / spacingHz;
   return { spacingHz, offsetsHz, freqsHz, wavelengthsNm, periodPs };
@@ -171,8 +170,8 @@ function makeDoublePulsePreset(delayFraction = 0.35) {
   return coeffToMagnitudePhase(coeff);
 }
 
-function synthesizeEnvelope(magnitudes, phasesDeg, spacingGhz, nPeriods, samplesPerPeriod = 620) {
-  const { spacingHz, offsetsHz, freqsHz, wavelengthsNm, periodPs } = combFrequencies(spacingGhz);
+function synthesizeEnvelope(magnitudes, phasesDeg, spacingGhz, nPeriods, centerWavelengthNm = DEFAULT_CENTER_WAVELENGTH_NM, samplesPerPeriod = 520) {
+  const { spacingHz, offsetsHz, freqsHz, wavelengthsNm, periodPs } = combFrequencies(spacingGhz, centerWavelengthNm);
   const nSamples = Math.max(900, Math.round(samplesPerPeriod * nPeriods));
   const tMin = -0.5 * nPeriods * periodPs;
   const tMax = 0.5 * nPeriods * periodPs;
@@ -210,11 +209,11 @@ function targetValuesForTime(tPs, periodPs, kind) {
 
 function getGlobalControls() {
   return {
+    centerWavelengthNm: clamp(parseNumber($('centerWavelengthInput').value, DEFAULT_CENTER_WAVELENGTH_NM), 1200, 1700),
     spacingGhz: parseNumber($('spacingSelect').value, 200),
     nPeriods: parseNumber($('periodsRange').value, 3),
     phasorTOverT: parseNumber($('phasorRange').value, 0),
     normalizePlots: $('normalizeCheckbox').checked,
-    showField: $('fieldCheckbox').checked,
     showTarget: $('targetCheckbox').checked,
   };
 }
@@ -239,10 +238,10 @@ function readLineControls() {
   }
 }
 
-function updateSummary(spacingGhz, periodPs, wavelengthsNm) {
+function updateSummary(centerWavelengthNm, spacingGhz, periodPs, wavelengthsNm) {
   const dlambdas = [];
   for (let i = 1; i < wavelengthsNm.length; i++) dlambdas.push(Math.abs(wavelengthsNm[i] - wavelengthsNm[i - 1]));
-  $('centerWavelengthText').textContent = `${CENTER_WAVELENGTH_NM.toFixed(1)} nm`;
+  $('centerWavelengthText').textContent = `${centerWavelengthNm.toFixed(1)} nm`;
   $('spacingText').textContent = `${spacingGhz} GHz`;
   $('periodText').textContent = `${periodPs.toFixed(3)} ps`;
   $('lambdaSpacingText').textContent = `${mean(dlambdas).toFixed(4)} nm`;
@@ -279,7 +278,7 @@ function makeSpectrumPlot(synth, controls) {
   };
   const layout = {
     margin: { l: 58, r: 16, t: 20, b: 62 },
-    xaxis: { title: 'Frequency offset from 1550-nm carrier (GHz)', zeroline: true },
+    xaxis: { title: `Frequency offset from ${controls.centerWavelengthNm.toFixed(1)}-nm carrier (GHz)`, zeroline: true },
     yaxis: { title: 'Line amplitude', range: [0, yMax] },
     bargap: 0.35,
     showlegend: false,
@@ -362,7 +361,6 @@ function makePhasorPlot(synth, controls) {
 
 function makeTimePlot(synth, controls) {
   const intensityPlot = controls.normalizePlots ? normalizeToMax(synth.intensity) : synth.intensity;
-  const fieldPlot = controls.normalizePlots ? normalizeToMax(synth.lineRe) : synth.lineRe;
   const traces = [{
     type: 'scatter',
     mode: 'lines',
@@ -372,18 +370,6 @@ function makeTimePlot(synth, controls) {
     line: { width: 3 },
     hovertemplate: 't = %{x:.3f} ps<br>%{y:.4g}<extra></extra>',
   }];
-
-  if (controls.showField) {
-    traces.push({
-      type: 'scatter',
-      mode: 'lines',
-      x: synth.tPs,
-      y: fieldPlot,
-      name: controls.normalizePlots ? 'Normalized Re{field}' : 'Re{field}',
-      line: { width: 2, dash: 'dash' },
-      hovertemplate: 't = %{x:.3f} ps<br>%{y:.4g}<extra></extra>',
-    });
-  }
 
   const targetPlot = currentTargetForPlot(synth, controls);
   if (targetPlot) {
@@ -400,29 +386,30 @@ function makeTimePlot(synth, controls) {
 
   const phasorTimePs = controls.phasorTOverT * synth.periodPs;
   const tMin = Math.min(...synth.tPs);
-  const tMax = Math.max(...synth.tPs);
   let displayTime = tMin + (((phasorTimePs - tMin) % synth.periodPs + synth.periodPs) % synth.periodPs);
   traces.push({
     type: 'scatter',
     mode: 'lines',
     x: [displayTime, displayTime],
-    y: controls.normalizePlots ? [-1.08, 1.08] : [0, Math.max(...synth.intensity) * 1.05],
+    y: controls.normalizePlots ? [-0.08, 1.08] : [0, Math.max(...synth.intensity) * 1.05],
     name: 'phasor snapshot time',
     line: { width: 1.5, dash: 'dashdot' },
     hoverinfo: 'skip',
   });
 
-  const title = state.targetRmse === null
-    ? `Resultant periodic time-domain signal, T = ${synth.periodPs.toFixed(3)} ps`
-    : `Resultant periodic time-domain signal, T = ${synth.periodPs.toFixed(3)} ps | target RMSE ≈ ${state.targetRmse.toFixed(3)}`;
-
-  const yRange = controls.normalizePlots ? [-1.15, 1.15] : undefined;
+  const yRange = controls.normalizePlots ? [-0.10, 1.12] : undefined;
+  const rmseText = state.targetRmse === null ? '' : `target RMSE ≈ ${state.targetRmse.toFixed(3)}`;
   const layout = {
-    margin: { l: 70, r: 20, t: 48, b: 64 },
-    title: { text: title, font: { size: 16 } },
-    xaxis: { title: 'Time relative to optical carrier envelope (ps)' },
-    yaxis: { title: 'Amplitude / intensity', range: yRange },
-    legend: { orientation: 'h', y: 1.12, x: 0 },
+    margin: { l: 66, r: 16, t: 20, b: 78 },
+    xaxis: { title: `Time relative to envelope, T = ${synth.periodPs.toFixed(3)} ps` },
+    yaxis: { title: controls.normalizePlots ? 'Normalized intensity' : 'Intensity |E(t)|²', range: yRange },
+    legend: { orientation: 'h', y: -0.25, x: 0, yanchor: 'top' },
+    annotations: rmseText ? [{
+      text: rmseText,
+      xref: 'paper', yref: 'paper', x: 1, y: 1.06,
+      xanchor: 'right', showarrow: false,
+      font: { size: 12 },
+    }] : [],
   };
   Plotly.react('timePlot', traces, layout, plotConfig());
 }
@@ -451,11 +438,13 @@ function updatePlots() {
   $('periodsOutput').value = controls.nPeriods;
   $('phasorOutput').value = controls.phasorTOverT.toFixed(2);
 
-  const synth = synthesizeEnvelope(state.amplitudes, state.phasesDeg, controls.spacingGhz, controls.nPeriods);
+  $('centerWavelengthInput').value = controls.centerWavelengthNm.toFixed(1);
+
+  const synth = synthesizeEnvelope(state.amplitudes, state.phasesDeg, controls.spacingGhz, controls.nPeriods, controls.centerWavelengthNm);
   makeSpectrumPlot(synth, controls);
   makePhasorPlot(synth, controls);
   makeTimePlot(synth, controls);
-  updateSummary(controls.spacingGhz, synth.periodPs, synth.wavelengthsNm);
+  updateSummary(controls.centerWavelengthNm, controls.spacingGhz, synth.periodPs, synth.wavelengthsNm);
 }
 
 function setValues({ magnitudes, phasesDeg, note = '', targetKind = null, targetType = null, targetLabel = '' }) {
@@ -468,19 +457,6 @@ function setValues({ magnitudes, phasesDeg, note = '', targetKind = null, target
   if (note) $('presetNote').innerHTML = note;
   applyStateToControls();
   updatePlots();
-}
-
-function fieldTargetPreset(kind, label) {
-  const coeff = coefficientsForTarget(kind, 'field');
-  const { magnitudes, phasesDeg } = coeffToMagnitudePhase(coeff);
-  return {
-    magnitudes,
-    phasesDeg,
-    note: `<strong>Field target: ${label}.</strong> Compare the dashed Re{field} curve with the dotted target. The solid intensity is |E|², so it will not itself look like the signed field target.`,
-    targetKind: kind,
-    targetType: 'field',
-    targetLabel: `${label} field target`,
-  };
 }
 
 function intensityTargetPreset(kind, label) {
@@ -515,7 +491,7 @@ const presetFunctions = {
     return {
       magnitudes: Array(N_LINES).fill(1),
       phasesDeg,
-      note: '<strong>Chirped field:</strong> quadratic spectral phase, analogous to group-delay dispersion.',
+      note: '<strong>Chirped spectral phase:</strong> quadratic spectral phase, analogous to group-delay dispersion.',
     };
   },
   'Chirped: strong quadratic spectral phase': () => {
@@ -526,7 +502,7 @@ const presetFunctions = {
     return {
       magnitudes: Array(N_LINES).fill(1),
       phasesDeg,
-      note: '<strong>Strong chirped field:</strong> larger quadratic phase excursion for stronger temporal spreading.',
+      note: '<strong>Strong chirped spectral phase:</strong> larger quadratic phase excursion for stronger temporal spreading.',
     };
   },
   'Chirped: cubic / asymmetric phase': () => {
@@ -534,13 +510,9 @@ const presetFunctions = {
     return {
       magnitudes: Array(N_LINES).fill(1),
       phasesDeg: centeredIndices.map(x => 260 * (x / norm) ** 3),
-      note: '<strong>Cubic / asymmetric chirp:</strong> third-order spectral phase that makes the field more asymmetric.',
+      note: '<strong>Cubic / asymmetric chirp:</strong> third-order spectral phase that makes the intensity envelope more asymmetric.',
     };
   },
-  'Field target: sawtooth': () => fieldTargetPreset('field_saw', 'sawtooth'),
-  'Field target: reverse sawtooth': () => fieldTargetPreset('field_reverse_saw', 'reverse sawtooth'),
-  'Field target: triangle': () => fieldTargetPreset('field_triangle', 'triangle'),
-  'Field target: square': () => fieldTargetPreset('field_square', 'square'),
   'Intensity target: sawtooth': () => intensityTargetPreset('intensity_saw', 'sawtooth'),
   'Intensity target: reverse sawtooth': () => intensityTargetPreset('intensity_reverse_saw', 'reverse sawtooth'),
   'Intensity target: triangle': () => intensityTargetPreset('intensity_triangle', 'triangle'),
@@ -558,13 +530,13 @@ const presetFunctions = {
     return {
       magnitudes,
       phasesDeg,
-      note: '<strong>Double-pulse-like field:</strong> spectral interference factor approximates two field pulses separated by about 0.35T.',
+      note: '<strong>Double-pulse-like intensity:</strong> spectral interference factor approximates two pulses separated by about 0.35T.',
     };
   },
   'Alternating 0 / π phase': () => ({
     magnitudes: Array(N_LINES).fill(1),
     phasesDeg: lineIndices.map(k => k % 2 === 0 ? 0 : 180),
-    note: '<strong>Alternating 0/π phase:</strong> flips the sign of alternating spectral lines, producing a strongly reshaped periodic field.',
+    note: '<strong>Alternating 0/π phase:</strong> flips the sign of alternating spectral lines, producing a strongly reshaped periodic envelope.',
   }),
   'Random amplitudes and phases': () => ({
     magnitudes: lineIndices.map(() => cleanNumber(0.45 + Math.random() * 0.75, 4)),
@@ -635,13 +607,13 @@ function buildPresetMenu() {
 }
 
 function attachGlobalEvents() {
+  $('centerWavelengthInput').addEventListener('change', scheduleUpdate);
   $('spacingSelect').addEventListener('change', scheduleUpdate);
   $('periodsRange').addEventListener('input', () => { $('periodsOutput').value = $('periodsRange').value; });
   $('periodsRange').addEventListener('change', scheduleUpdate);
   $('phasorRange').addEventListener('input', () => { $('phasorOutput').value = Number($('phasorRange').value).toFixed(2); });
   $('phasorRange').addEventListener('change', scheduleUpdate);
   $('normalizeCheckbox').addEventListener('change', scheduleUpdate);
-  $('fieldCheckbox').addEventListener('change', scheduleUpdate);
   $('targetCheckbox').addEventListener('change', scheduleUpdate);
 
   $('applyPresetButton').addEventListener('click', () => {
@@ -658,7 +630,7 @@ function attachGlobalEvents() {
     readLineControls();
     const payload = {
       description: '8-line optical pulse shaping settings',
-      centerWavelengthNm: CENTER_WAVELENGTH_NM,
+      centerWavelengthNm: clamp(parseNumber($('centerWavelengthInput').value, DEFAULT_CENTER_WAVELENGTH_NM), 1200, 1700),
       spacingGhz: parseNumber($('spacingSelect').value, 200),
       amplitudes: state.amplitudes.map(v => cleanNumber(v, 6)),
       phasesDeg: state.phasesDeg.map(v => cleanNumber(v, 4)),
