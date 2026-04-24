@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Interactive Optical Pulse Shaping</title>
+  <meta name="description" content="Line-by-line pulse shaping demo with 8 equal-frequency-spaced CW laser lines near 1550 nm." />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script defer src="script.js"></script>
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Integrated photonics · optical arbitrary waveform generation</p>
+      <h1>Interactive optical pulse shaping with 8 CW laser lines</h1>
+      <p class="lede">
+        Adjust the amplitude and phase of eight equal-frequency-spaced laser inputs near 1550 nm.
+        The app synthesizes the periodic complex envelope, the measurable intensity, and a 3D phasor view of the line phases.
+      </p>
+    </div>
+    <div class="summary-card" id="summaryCard">
+      <div class="summary-row"><span>Center wavelength</span><strong id="centerWavelengthText">1550.0 nm</strong></div>
+      <div class="summary-row"><span>Frequency spacing</span><strong id="spacingText">200 GHz</strong></div>
+      <div class="summary-row"><span>Repetition period</span><strong id="periodText">5.000 ps</strong></div>
+      <div class="summary-row"><span>Approx. λ spacing</span><strong id="lambdaSpacingText">—</strong></div>
+      <div class="summary-row"><span>Preset fit</span><strong id="rmseText">—</strong></div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel controls-panel" aria-labelledby="global-controls-heading">
+      <div class="section-heading">
+        <h2 id="global-controls-heading">Global controls</h2>
+        <p>Equal frequency spacing gives a clean periodic signal with <span class="math">T = 1 / Δf</span>.</p>
+      </div>
+      <div class="global-grid">
+        <label class="field">
+          <span>Comb spacing</span>
+          <select id="spacingSelect">
+            <option value="20">20 GHz</option>
+            <option value="50">50 GHz</option>
+            <option value="100">100 GHz</option>
+            <option value="200" selected>200 GHz</option>
+          </select>
+        </label>
+
+        <label class="field range-field">
+          <span>Periods shown: <output id="periodsOutput">3</output></span>
+          <input id="periodsRange" type="range" min="1" max="8" step="1" value="3" />
+        </label>
+
+        <label class="field range-field">
+          <span>3D phasor time: <output id="phasorOutput">0.00</output>T</span>
+          <input id="phasorRange" type="range" min="0" max="1" step="0.01" value="0" />
+        </label>
+      </div>
+
+      <div class="checkbox-row">
+        <label><input id="normalizeCheckbox" type="checkbox" checked /> Normalize plotted curves</label>
+        <label><input id="fieldCheckbox" type="checkbox" checked /> Show Re{field}</label>
+        <label><input id="targetCheckbox" type="checkbox" checked /> Show preset target</label>
+      </div>
+    </section>
+
+    <section class="panel preset-panel" aria-labelledby="presets-heading">
+      <div class="section-heading">
+        <h2 id="presets-heading">Presets</h2>
+        <p>
+          Field presets target <span class="math">Re{E(t)}</span> in a Fourier-series reference frame.
+          Intensity presets target the directly measurable <span class="math">|E(t)|²</span>.
+        </p>
+      </div>
+      <div class="preset-row">
+        <select id="presetSelect" aria-label="Preset selection"></select>
+        <button id="applyPresetButton" type="button">Apply preset</button>
+        <button id="resetButton" type="button" class="secondary">Reset flat comb</button>
+        <button id="exportButton" type="button" class="secondary">Export JSON</button>
+      </div>
+      <p id="presetNote" class="note">No preset has been applied yet.</p>
+    </section>
+
+    <section class="panel line-panel" aria-labelledby="line-controls-heading">
+      <div class="section-heading">
+        <h2 id="line-controls-heading">Per-line amplitude and phase</h2>
+        <p>
+          Sliders are convenient for exploration; numeric boxes are editable for exact values.
+          Phases are interpreted in degrees and may exceed ±180°.
+        </p>
+      </div>
+      <div class="line-table" id="lineTable"></div>
+    </section>
+
+    <section class="plot-grid" aria-labelledby="plots-heading">
+      <h2 id="plots-heading" class="sr-only">Interactive plots</h2>
+      <article class="panel plot-panel">
+        <h3>Input comb spectrum</h3>
+        <div id="spectrumPlot" class="plot plot-small"></div>
+      </article>
+      <article class="panel plot-panel">
+        <h3>3D phasor representation</h3>
+        <div id="phasorPlot" class="plot plot-small"></div>
+      </article>
+      <article class="panel plot-panel wide">
+        <h3>Resultant periodic time-domain signal</h3>
+        <div id="timePlot" class="plot plot-large"></div>
+      </article>
+    </section>
+
+    <section class="panel explanation-panel">
+      <h2>Interpretation notes</h2>
+      <p>
+        The solid curve is the physical intensity envelope <span class="math">|E(t)|²</span>.
+        The dashed curve is the real part of the synthesized field in a line-index reference frame;
+        it is useful for seeing square, triangle, and sawtooth Fourier-series behavior.
+      </p>
+      <p>
+        With only eight lines, discontinuous targets cannot be exact. Square and sawtooth targets show finite-bandwidth rounding and ringing,
+        while triangle-like targets are usually cleaner because their Fourier coefficients decay faster.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Static GitHub Pages app · no Python backend required</p>
+  </footer>
+</body>
+</html>
