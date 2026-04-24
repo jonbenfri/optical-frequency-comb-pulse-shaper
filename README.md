@@ -33,3 +33,7 @@ The app synthesizes the complex optical envelope using equal frequency spacing. 
 ## v4 layout note
 
 The 3D phasor plot has extra margins, a slightly taller panel, and shortened axis labels so labels are not clipped on GitHub Pages.
+
+## Interaction notes
+
+The amplitude, phase, time-window, and phasor-time sliders update the plots live while dragging. The JavaScript uses `requestAnimationFrame` to coalesce rapid slider events, so the app redraws at most once per browser animation frame instead of attempting a full redraw for every raw input event.

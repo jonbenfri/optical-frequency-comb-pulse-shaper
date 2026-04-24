@@ -438,6 +438,7 @@ function plotConfig() {
 }
 
 let pendingPlot = null;
+// Coalesce rapid slider events into one Plotly update per animation frame.
 function scheduleUpdate() {
   if (state.batch) return;
   if (pendingPlot !== null) cancelAnimationFrame(pendingPlot);
@@ -634,7 +635,11 @@ function buildLineControls() {
     const phaseRange = $(`phaseRange${k}`);
     const phaseNumber = $(`phaseNumber${k}`);
 
-    ampRange.addEventListener('input', () => { ampNumber.value = formatAmp(ampRange.value); });
+    ampRange.addEventListener('input', () => {
+      ampNumber.value = formatAmp(ampRange.value);
+      state.targetKind = null;
+      scheduleUpdate();
+    });
     ampRange.addEventListener('change', () => { state.targetKind = null; scheduleUpdate(); });
     ampNumber.addEventListener('change', () => {
       const amp = clamp(parseNumber(ampNumber.value, state.amplitudes[k]), 0, 5);
@@ -644,7 +649,11 @@ function buildLineControls() {
       scheduleUpdate();
     });
 
-    phaseRange.addEventListener('input', () => { phaseNumber.value = formatPhase(phaseRange.value); });
+    phaseRange.addEventListener('input', () => {
+      phaseNumber.value = formatPhase(phaseRange.value);
+      state.targetKind = null;
+      scheduleUpdate();
+    });
     phaseRange.addEventListener('change', () => { state.targetKind = null; scheduleUpdate(); });
     phaseNumber.addEventListener('change', () => {
       const phase = parseNumber(phaseNumber.value, state.phasesDeg[k]);
@@ -669,9 +678,15 @@ function buildPresetMenu() {
 function attachGlobalEvents() {
   $('centerWavelengthInput').addEventListener('change', scheduleUpdate);
   $('spacingSelect').addEventListener('change', scheduleUpdate);
-  $('periodsRange').addEventListener('input', () => { $('periodsOutput').value = $('periodsRange').value; });
+  $('periodsRange').addEventListener('input', () => {
+    $('periodsOutput').value = $('periodsRange').value;
+    scheduleUpdate();
+  });
   $('periodsRange').addEventListener('change', scheduleUpdate);
-  $('phasorRange').addEventListener('input', () => { $('phasorOutput').value = Number($('phasorRange').value).toFixed(2); });
+  $('phasorRange').addEventListener('input', () => {
+    $('phasorOutput').value = Number($('phasorRange').value).toFixed(2);
+    scheduleUpdate();
+  });
   $('phasorRange').addEventListener('change', scheduleUpdate);
   $('normalizeCheckbox').addEventListener('change', scheduleUpdate);
   $('targetCheckbox').addEventListener('change', scheduleUpdate);
