@@ -158,6 +158,11 @@ input[type="range"] {
   accent-color: var(--accent);
 }
 
+
+.global-span-2 { grid-column: span 2; }
+
+.line-hidden { display: none; }
+
 .checkbox-row {
   display: flex;
   flex-wrap: wrap;

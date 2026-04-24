@@ -2,13 +2,14 @@
 
 **Live demo:** https://jonbenfri.github.io/optical-frequency-comb-pulse-shaper/
 
-Static GitHub Pages app for demonstrating line-by-line optical pulse shaping with 8 equal-frequency-spaced CW laser inputs.
+Static GitHub Pages app for demonstrating line-by-line optical pulse shaping with up to 16 equal-frequency-spaced CW laser inputs.
 
 ## Features
 
-- 8 laser lines centered around an editable center wavelength, default `1550.0 nm`
+- Selectable active line count: `4`, `8`, `12`, or `16`
+- Laser lines centered around an editable center wavelength, default `1550.0 nm`
 - Comb spacing selector: `20`, `50`, `100`, and `200 GHz`
-- Editable amplitude and phase controls for every line
+- Editable amplitude and phase controls for every active line
 - Plotly-based input spectrum, 3D phasor view, and time-domain intensity envelope
 - Intensity-focused presets for sawtooth-like, reverse-sawtooth-like, triangle-like, and square-like targets
 - Amplitude-shaping presets: ramped, center-weighted, edge-weighted, notched, and alternating strong/weak line amplitudes
@@ -28,11 +29,7 @@ No Python backend is required. Plotly is loaded from a CDN in `index.html`.
 
 ## Notes
 
-The app synthesizes the complex optical envelope using equal frequency spacing. The plotted waveform is the intensity envelope `|E(t)|²`, not the raw optical carrier field. With only eight lines, discontinuous targets such as square and sawtooth waveforms will show finite-bandwidth smoothing and ringing.
-
-## v4 layout note
-
-The 3D phasor plot has extra margins, a slightly taller panel, and shortened axis labels so labels are not clipped on GitHub Pages.
+The app synthesizes the complex optical envelope using equal frequency spacing. The plotted waveform is the intensity envelope `|E(t)|²`, not the raw optical carrier field. With more active lines, discontinuous targets such as square and sawtooth waveforms are approximated more faithfully, though finite-bandwidth smoothing and ringing remain visible.
 
 ## Interaction notes
 

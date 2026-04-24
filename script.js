@@ -1,14 +1,14 @@
 'use strict';
 
 const C0 = 299_792_458.0;
-const N_LINES = 8;
+const MAX_LINES = 16;
+const DEFAULT_LINE_COUNT = 8;
 const DEFAULT_CENTER_WAVELENGTH_NM = 1550.0;
-const lineIndices = Array.from({ length: N_LINES }, (_, k) => k);
-const centeredIndices = lineIndices.map(k => k - (N_LINES - 1) / 2);
 
 const state = {
-  amplitudes: Array(N_LINES).fill(1.0),
-  phasesDeg: Array(N_LINES).fill(0.0),
+  lineCount: DEFAULT_LINE_COUNT,
+  amplitudes: Array(MAX_LINES).fill(1.0),
+  phasesDeg: Array(MAX_LINES).fill(0.0),
   targetKind: null,
   targetType: null,
   targetLabel: '',
@@ -20,6 +20,22 @@ const coefficientCache = new Map();
 
 function $(id) {
   return document.getElementById(id);
+}
+
+function lineIndices(n = state.lineCount) {
+  return Array.from({ length: n }, (_, k) => k);
+}
+
+function centeredIndices(n = state.lineCount) {
+  return lineIndices(n).map(k => k - (n - 1) / 2);
+}
+
+function activeAmplitudes(n = state.lineCount) {
+  return state.amplitudes.slice(0, n);
+}
+
+function activePhases(n = state.lineCount) {
+  return state.phasesDeg.slice(0, n);
 }
 
 function clamp(value, lo, hi) {
@@ -69,10 +85,10 @@ function rmseNormalized(values, target) {
   return Math.sqrt(mse);
 }
 
-function combFrequencies(spacingGhz, centerWavelengthNm = DEFAULT_CENTER_WAVELENGTH_NM) {
+function combFrequencies(spacingGhz, centerWavelengthNm = DEFAULT_CENTER_WAVELENGTH_NM, nLines = state.lineCount) {
   const spacingHz = spacingGhz * 1e9;
   const centerFreqHz = C0 / (centerWavelengthNm * 1e-9);
-  const offsetsHz = centeredIndices.map(idx => idx * spacingHz);
+  const offsetsHz = centeredIndices(nLines).map(idx => idx * spacingHz);
   const freqsHz = offsetsHz.map(offset => centerFreqHz + offset);
   const wavelengthsNm = freqsHz.map(freq => C0 / freq * 1e9);
   const periodPs = 1e12 / spacingHz;
@@ -82,10 +98,6 @@ function combFrequencies(spacingGhz, centerWavelengthNm = DEFAULT_CENTER_WAVELEN
 function targetProfile(kind, u) {
   const floor = 0.05;
   switch (kind) {
-    case 'field_saw': return 2 * u - 1;
-    case 'field_reverse_saw': return 1 - 2 * u;
-    case 'field_triangle': return 1 - 4 * Math.abs(u - 0.5);
-    case 'field_square': return u < 0.5 ? 1 : -1;
     case 'intensity_saw': return floor + (1 - floor) * u;
     case 'intensity_reverse_saw': return 1 - (1 - floor) * u;
     case 'intensity_triangle': return floor + (1 - floor) * (1 - 2 * Math.abs(u - 0.5));
@@ -94,12 +106,10 @@ function targetProfile(kind, u) {
   }
 }
 
-function fitRealFieldCoefficients(samples) {
-  // Fit y(u) with Re{sum_k C_k exp(i 2πku)}, k = 0..7.
-  // Continuous orthogonality is approximated by dense uniform quadrature.
+function fitRealFieldCoefficients(samples, nLines = state.lineCount) {
   const m = samples.length;
   const coeff = [];
-  for (const k of lineIndices) {
+  for (const k of lineIndices(nLines)) {
     let cosNum = 0;
     let cosDen = 0;
     let sinNum = 0;
@@ -125,53 +135,52 @@ function fitRealFieldCoefficients(samples) {
   return coeff;
 }
 
-function coefficientsForTarget(kind, type) {
-  const cacheKey = `${type}:${kind}`;
+function coefficientsForTarget(kind, type, nLines = state.lineCount) {
+  const cacheKey = `${nLines}:${type}:${kind}`;
   if (coefficientCache.has(cacheKey)) return coefficientCache.get(cacheKey);
 
   const m = 4096;
   let samples = Array.from({ length: m }, (_, j) => targetProfile(kind, j / m));
 
-  if (type === 'field') {
-    const avg = mean(samples);
-    samples = normalizeToMax(samples.map(v => v - avg));
-  } else if (type === 'intensity') {
+  if (type === 'intensity') {
     samples = samples.map(v => Math.sqrt(Math.max(0, v)));
   }
 
-  const coeff = fitRealFieldCoefficients(samples);
+  const coeff = fitRealFieldCoefficients(samples, nLines);
   coefficientCache.set(cacheKey, coeff);
   return coeff;
 }
 
-function coeffToMagnitudePhase(coeff) {
+function coeffToMagnitudePhase(coeff, nLines = state.lineCount) {
   const magnitudes = coeff.map(c => cleanNumber(Math.hypot(c.re, c.im), 6));
   const phasesDeg = coeff.map((c, i) => {
     if (magnitudes[i] < 1e-8) return 0;
     return cleanNumber(Math.atan2(c.im, c.re) * 180 / Math.PI, 4);
   });
+  while (magnitudes.length < nLines) magnitudes.push(0);
+  while (phasesDeg.length < nLines) phasesDeg.push(0);
   return { magnitudes, phasesDeg };
 }
 
-function makeGaussianLinePreset(sigmaLines = 1.35) {
-  let magnitudes = centeredIndices.map(x => Math.exp(-0.5 * (x / sigmaLines) ** 2));
+function makeGaussianLinePreset(sigmaLines = 1.35, nLines = state.lineCount) {
+  let magnitudes = centeredIndices(nLines).map(x => Math.exp(-0.5 * (x / sigmaLines) ** 2));
   const maxVal = Math.max(...magnitudes);
   magnitudes = magnitudes.map(v => cleanNumber(v / maxVal, 6));
-  return { magnitudes, phasesDeg: Array(N_LINES).fill(0) };
+  return { magnitudes, phasesDeg: Array(nLines).fill(0) };
 }
 
-function makeDoublePulsePreset(delayFraction = 0.35) {
-  const coeff = lineIndices.map(k => {
+function makeDoublePulsePreset(delayFraction = 0.35, nLines = state.lineCount) {
+  const coeff = lineIndices(nLines).map(k => {
     const theta = -2 * Math.PI * k * delayFraction;
     return { re: 1 + Math.cos(theta), im: Math.sin(theta) };
   });
   const maxAbs = Math.max(...coeff.map(c => Math.hypot(c.re, c.im)));
   coeff.forEach(c => { c.re /= maxAbs; c.im /= maxAbs; });
-  return coeffToMagnitudePhase(coeff);
+  return coeffToMagnitudePhase(coeff, nLines);
 }
 
-function synthesizeEnvelope(magnitudes, phasesDeg, spacingGhz, nPeriods, centerWavelengthNm = DEFAULT_CENTER_WAVELENGTH_NM, samplesPerPeriod = 520) {
-  const { spacingHz, offsetsHz, freqsHz, wavelengthsNm, periodPs } = combFrequencies(spacingGhz, centerWavelengthNm);
+function synthesizeEnvelope(magnitudes, phasesDeg, spacingGhz, nPeriods, centerWavelengthNm = DEFAULT_CENTER_WAVELENGTH_NM, samplesPerPeriod = 520, nLines = state.lineCount) {
+  const { spacingHz, offsetsHz, freqsHz, wavelengthsNm, periodPs } = combFrequencies(spacingGhz, centerWavelengthNm, nLines);
   const nSamples = Math.max(900, Math.round(samplesPerPeriod * nPeriods));
   const tMin = -0.5 * nPeriods * periodPs;
   const tMax = 0.5 * nPeriods * periodPs;
@@ -180,16 +189,17 @@ function synthesizeEnvelope(magnitudes, phasesDeg, spacingGhz, nPeriods, centerW
   const centeredIm = Array(nSamples).fill(0);
   const lineRe = Array(nSamples).fill(0);
   const lineIm = Array(nSamples).fill(0);
+  const indices = lineIndices(nLines);
 
-  for (let k = 0; k < N_LINES; k++) {
-    const amp = magnitudes[k];
-    const phi = phasesDeg[k] * Math.PI / 180;
+  for (let k = 0; k < nLines; k++) {
+    const amp = magnitudes[k] ?? 0;
+    const phi = (phasesDeg[k] ?? 0) * Math.PI / 180;
     for (let j = 0; j < nSamples; j++) {
       const tS = tPs[j] * 1e-12;
       const thetaCentered = 2 * Math.PI * offsetsHz[k] * tS + phi;
       centeredRe[j] += amp * Math.cos(thetaCentered);
       centeredIm[j] += amp * Math.sin(thetaCentered);
-      const thetaLine = 2 * Math.PI * lineIndices[k] * spacingHz * tS + phi;
+      const thetaLine = 2 * Math.PI * indices[k] * spacingHz * tS + phi;
       lineRe[j] += amp * Math.cos(thetaLine);
       lineIm[j] += amp * Math.sin(thetaLine);
     }
@@ -208,9 +218,12 @@ function targetValuesForTime(tPs, periodPs, kind) {
 }
 
 function getGlobalControls() {
+  const lineCount = clamp(parseNumber($('lineCountSelect').value, state.lineCount), 4, MAX_LINES);
+  state.lineCount = lineCount;
   return {
     centerWavelengthNm: clamp(parseNumber($('centerWavelengthInput').value, DEFAULT_CENTER_WAVELENGTH_NM), 1200, 1700),
     spacingGhz: parseNumber($('spacingSelect').value, 200),
+    lineCount,
     nPeriods: parseNumber($('periodsRange').value, 3),
     phasorTOverT: parseNumber($('phasorRange').value, 0),
     normalizePlots: $('normalizeCheckbox').checked,
@@ -220,31 +233,40 @@ function getGlobalControls() {
 
 function applyStateToControls() {
   state.batch = true;
-  for (let k = 0; k < N_LINES; k++) {
+  $('lineCountSelect').value = String(state.lineCount);
+  for (let k = 0; k < MAX_LINES; k++) {
+    const row = $(`lineRow${k}`);
+    if (row) row.classList.toggle('line-hidden', k >= state.lineCount);
     const amp = cleanNumber(clamp(state.amplitudes[k], 0, 5), 6);
     const phase = cleanNumber(state.phasesDeg[k], 4);
-    $(`ampRange${k}`).value = String(clamp(amp, 0, 1.5));
-    $(`ampNumber${k}`).value = formatAmp(amp);
-    $(`phaseRange${k}`).value = String(wrapPhaseToSliderRange(phase));
-    $(`phaseNumber${k}`).value = formatPhase(phase);
+    const ampRange = $(`ampRange${k}`);
+    const ampNumber = $(`ampNumber${k}`);
+    const phaseRange = $(`phaseRange${k}`);
+    const phaseNumber = $(`phaseNumber${k}`);
+    if (!ampRange) continue;
+    ampRange.value = String(clamp(amp, 0, 1.5));
+    ampNumber.value = formatAmp(amp);
+    phaseRange.value = String(wrapPhaseToSliderRange(phase));
+    phaseNumber.value = formatPhase(phase);
   }
   state.batch = false;
 }
 
 function readLineControls() {
-  for (let k = 0; k < N_LINES; k++) {
+  for (let k = 0; k < state.lineCount; k++) {
     state.amplitudes[k] = clamp(parseNumber($(`ampNumber${k}`).value, state.amplitudes[k]), 0, 5);
     state.phasesDeg[k] = parseNumber($(`phaseNumber${k}`).value, state.phasesDeg[k]);
   }
 }
 
-function updateSummary(centerWavelengthNm, spacingGhz, periodPs, wavelengthsNm) {
+function updateSummary(lineCount, centerWavelengthNm, spacingGhz, periodPs, wavelengthsNm) {
   const dlambdas = [];
   for (let i = 1; i < wavelengthsNm.length; i++) dlambdas.push(Math.abs(wavelengthsNm[i] - wavelengthsNm[i - 1]));
+  $('lineCountText').textContent = String(lineCount);
   $('centerWavelengthText').textContent = `${centerWavelengthNm.toFixed(1)} nm`;
   $('spacingText').textContent = `${spacingGhz} GHz`;
   $('periodText').textContent = `${periodPs.toFixed(3)} ps`;
-  $('lambdaSpacingText').textContent = `${mean(dlambdas).toFixed(4)} nm`;
+  $('lambdaSpacingText').textContent = dlambdas.length ? `${mean(dlambdas).toFixed(4)} nm` : '—';
   $('rmseText').textContent = state.targetRmse === null ? '—' : `normalized RMSE ≈ ${state.targetRmse.toFixed(3)}`;
 }
 
@@ -254,8 +276,7 @@ function currentTargetForPlot(synth, controls) {
 
   const targetRaw = targetValuesForTime(synth.tPs, synth.periodPs, state.targetKind);
   let compareRaw;
-  if (state.targetType === 'field') compareRaw = synth.lineRe;
-  else if (state.targetType === 'intensity') compareRaw = synth.intensity;
+  if (state.targetType === 'intensity') compareRaw = synth.intensity;
   else return null;
 
   state.targetRmse = rmseNormalized(compareRaw, targetRaw);
@@ -263,14 +284,15 @@ function currentTargetForPlot(synth, controls) {
 }
 
 function makeSpectrumPlot(synth, controls) {
+  const amps = activeAmplitudes(controls.lineCount);
+  const phases = activePhases(controls.lineCount);
   const offsetsGhz = synth.offsetsHz.map(v => v / 1e9);
-  const phases = state.phasesDeg;
-  const text = state.amplitudes.map((amp, k) => `${synth.wavelengthsNm[k].toFixed(2)} nm<br>φ=${phases[k].toFixed(1)}°`);
-  const yMax = Math.max(1.55, 1.1 * Math.max(...state.amplitudes));
+  const text = amps.map((amp, k) => `${synth.wavelengthsNm[k].toFixed(2)} nm<br>φ=${phases[k].toFixed(1)}°`);
+  const yMax = Math.max(1.55, 1.1 * Math.max(...amps, 1));
   const trace = {
     type: 'bar',
     x: offsetsGhz,
-    y: state.amplitudes,
+    y: amps,
     text,
     textposition: 'outside',
     hovertemplate: 'Offset %{x:.1f} GHz<br>Amplitude %{y:.3f}<br>%{text}<extra></extra>',
@@ -287,10 +309,12 @@ function makeSpectrumPlot(synth, controls) {
 }
 
 function makePhasorPlot(synth, controls) {
+  const amps = activeAmplitudes(controls.lineCount);
+  const phases = activePhases(controls.lineCount);
   const offsetsGhz = synth.offsetsHz.map(v => v / 1e9);
   const phasorTimePs = controls.phasorTOverT * synth.periodPs;
   const phasorTimeS = phasorTimePs * 1e-12;
-  const maxMag = Math.max(1, ...state.amplitudes);
+  const maxMag = Math.max(1, ...amps);
   const traces = [];
 
   traces.push({
@@ -301,14 +325,13 @@ function makePhasorPlot(synth, controls) {
     z: [0, 0],
     line: { width: 4 },
     hoverinfo: 'skip',
-    name: 'frequency axis',
     showlegend: false,
   });
 
-  for (let k = 0; k < N_LINES; k++) {
-    const theta = state.phasesDeg[k] * Math.PI / 180 + 2 * Math.PI * synth.offsetsHz[k] * phasorTimeS;
-    const y = state.amplitudes[k] * Math.cos(theta);
-    const z = state.amplitudes[k] * Math.sin(theta);
+  for (let k = 0; k < controls.lineCount; k++) {
+    const theta = phases[k] * Math.PI / 180 + 2 * Math.PI * synth.offsetsHz[k] * phasorTimeS;
+    const y = amps[k] * Math.cos(theta);
+    const z = amps[k] * Math.sin(theta);
     traces.push({
       type: 'scatter3d',
       mode: 'lines+markers+text',
@@ -319,8 +342,7 @@ function makePhasorPlot(synth, controls) {
       textposition: 'top center',
       marker: { size: [2, 5] },
       line: { width: 6 },
-      name: `Line ${k}`,
-      hovertemplate: `Line ${k}<br>Offset ${offsetsGhz[k].toFixed(1)} GHz<br>Amplitude ${state.amplitudes[k].toFixed(3)}<br>Phase ${state.phasesDeg[k].toFixed(1)}°<extra></extra>`,
+      hovertemplate: `Line ${k}<br>Offset ${offsetsGhz[k].toFixed(1)} GHz<br>Amplitude ${amps[k].toFixed(3)}<br>Phase ${phases[k].toFixed(1)}°<extra></extra>`,
       showlegend: false,
     });
   }
@@ -342,7 +364,6 @@ function makePhasorPlot(synth, controls) {
     z: circleZ,
     line: { width: 2, dash: 'dot' },
     hoverinfo: 'skip',
-    name: 'unit phase circle',
     showlegend: false,
   });
 
@@ -438,7 +459,6 @@ function plotConfig() {
 }
 
 let pendingPlot = null;
-// Coalesce rapid slider events into one Plotly update per animation frame.
 function scheduleUpdate() {
   if (state.batch) return;
   if (pendingPlot !== null) cancelAnimationFrame(pendingPlot);
@@ -460,19 +480,21 @@ function updatePlots() {
   const controls = getGlobalControls();
   $('periodsOutput').value = controls.nPeriods;
   $('phasorOutput').value = controls.phasorTOverT.toFixed(2);
-
   $('centerWavelengthInput').value = controls.centerWavelengthNm.toFixed(1);
+  $('lineCountSelect').value = String(controls.lineCount);
 
-  const synth = synthesizeEnvelope(state.amplitudes, state.phasesDeg, controls.spacingGhz, controls.nPeriods, controls.centerWavelengthNm);
+  const synth = synthesizeEnvelope(activeAmplitudes(controls.lineCount), activePhases(controls.lineCount), controls.spacingGhz, controls.nPeriods, controls.centerWavelengthNm, 520, controls.lineCount);
   makeSpectrumPlot(synth, controls);
   makePhasorPlot(synth, controls);
   makeTimePlot(synth, controls);
-  updateSummary(controls.centerWavelengthNm, controls.spacingGhz, synth.periodPs, synth.wavelengthsNm);
+  updateSummary(controls.lineCount, controls.centerWavelengthNm, controls.spacingGhz, synth.periodPs, synth.wavelengthsNm);
 }
 
 function setValues({ magnitudes, phasesDeg, note = '', targetKind = null, targetType = null, targetLabel = '' }) {
-  state.amplitudes = magnitudes.map(v => clamp(cleanNumber(v, 6), 0, 5));
-  state.phasesDeg = phasesDeg.map(v => cleanNumber(v, 4));
+  for (let k = 0; k < MAX_LINES; k++) {
+    state.amplitudes[k] = k < magnitudes.length ? clamp(cleanNumber(magnitudes[k], 6), 0, 5) : 0;
+    state.phasesDeg[k] = k < phasesDeg.length ? cleanNumber(phasesDeg[k], 4) : 0;
+  }
   state.targetKind = targetKind;
   state.targetType = targetType;
   state.targetLabel = targetLabel;
@@ -485,49 +507,52 @@ function setValues({ magnitudes, phasesDeg, note = '', targetKind = null, target
 function amplitudePreset(magnitudes, label, extraNote = '') {
   return {
     magnitudes: magnitudes.map(v => cleanNumber(v, 6)),
-    phasesDeg: Array(N_LINES).fill(0),
+    phasesDeg: Array(magnitudes.length).fill(0),
     note: ('<strong>' + label + ':</strong> flat spectral phase with shaped line amplitudes. ' + extraNote).trim(),
   };
 }
 
-function makeLinearAmplitudeRamp(direction = 'up') {
+function makeLinearAmplitudeRamp(direction = 'up', nLines = state.lineCount) {
   const lo = 0.18;
   const hi = 1.0;
-  let magnitudes = lineIndices.map(k => lo + (hi - lo) * k / (N_LINES - 1));
+  let magnitudes = lineIndices(nLines).map(k => lo + (hi - lo) * k / Math.max(nLines - 1, 1));
   if (direction === 'down') magnitudes = magnitudes.slice().reverse();
   return magnitudes;
 }
 
-function makeCenterWeightedAmplitudes(sigmaLines = 1.05) {
-  let magnitudes = centeredIndices.map(x => Math.exp(-0.5 * (x / sigmaLines) ** 2));
+function makeCenterWeightedAmplitudes(sigmaLines = null, nLines = state.lineCount) {
+  const sigma = sigmaLines ?? Math.max(1.05, 0.22 * nLines);
+  let magnitudes = centeredIndices(nLines).map(x => Math.exp(-0.5 * (x / sigma) ** 2));
   const maxVal = Math.max(...magnitudes);
   return magnitudes.map(v => v / maxVal);
 }
 
-function makeEdgeWeightedAmplitudes(power = 1.2) {
-  const maxAbs = Math.max(...centeredIndices.map(Math.abs));
-  return centeredIndices.map(x => 0.18 + 0.82 * (Math.abs(x) / maxAbs) ** power);
+function makeEdgeWeightedAmplitudes(power = 1.2, nLines = state.lineCount) {
+  const centers = centeredIndices(nLines);
+  const maxAbs = Math.max(...centers.map(Math.abs), 1);
+  return centers.map(x => 0.18 + 0.82 * (Math.abs(x) / maxAbs) ** power);
 }
 
-function makeCenterNotchAmplitudes() {
-  const maxAbs = Math.max(...centeredIndices.map(Math.abs));
-  return centeredIndices.map(x => {
+function makeCenterNotchAmplitudes(nLines = state.lineCount) {
+  const centers = centeredIndices(nLines);
+  const maxAbs = Math.max(...centers.map(Math.abs), 1);
+  return centers.map(x => {
     const d = Math.abs(x) / maxAbs;
     return 0.12 + 0.88 * (1 - Math.exp(-4.2 * d ** 2));
   });
 }
 
-function makeAlternatingAmplitudePattern() {
-  return lineIndices.map(k => (k % 2 === 0 ? 1.0 : 0.22));
+function makeAlternatingAmplitudePattern(nLines = state.lineCount) {
+  return lineIndices(nLines).map(k => (k % 2 === 0 ? 1.0 : 0.22));
 }
 
 function intensityTargetPreset(kind, label) {
-  const coeff = coefficientsForTarget(kind, 'intensity');
-  const { magnitudes, phasesDeg } = coeffToMagnitudePhase(coeff);
+  const coeff = coefficientsForTarget(kind, 'intensity', state.lineCount);
+  const { magnitudes, phasesDeg } = coeffToMagnitudePhase(coeff, state.lineCount);
   return {
     magnitudes,
     phasesDeg,
-    note: `<strong>Intensity target: ${label}.</strong> Compare the solid intensity curve with the dotted target. Finite 8-line bandwidth causes rounded edges and ripple.`,
+    note: `<strong>Intensity target: ${label}.</strong> Compare the solid intensity curve with the dotted target. Finite ${state.lineCount}-line bandwidth causes rounded edges and ripple.`,
     targetKind: kind,
     targetType: 'intensity',
     targetLabel: `${label} intensity target`,
@@ -536,13 +561,13 @@ function intensityTargetPreset(kind, label) {
 
 const presetFunctions = {
   'Transform-limited pulse train': () => ({
-    magnitudes: Array(N_LINES).fill(1),
-    phasesDeg: Array(N_LINES).fill(0),
-    note: '<strong>Transform-limited:</strong> equal amplitudes and flat spectral phase. Produces the shortest pulse train for this flat 8-line spectrum.',
+    magnitudes: Array(state.lineCount).fill(1),
+    phasesDeg: Array(state.lineCount).fill(0),
+    note: `<strong>Transform-limited:</strong> equal amplitudes and flat spectral phase. Produces the shortest pulse train for this flat ${state.lineCount}-line spectrum.`,
   }),
   'Time shift: linear phase ramp': () => ({
-    magnitudes: Array(N_LINES).fill(1),
-    phasesDeg: lineIndices.map(k => -360 * k * 0.25),
+    magnitudes: Array(state.lineCount).fill(1),
+    phasesDeg: lineIndices(state.lineCount).map(k => -360 * k * 0.25),
     note: '<strong>Linear phase ramp:</strong> shifts the waveform in time while preserving the intensity shape.',
   }),
   'Intensity target: sawtooth': () => intensityTargetPreset('intensity_saw', 'sawtooth'),
@@ -550,45 +575,46 @@ const presetFunctions = {
   'Intensity target: triangle': () => intensityTargetPreset('intensity_triangle', 'triangle'),
   'Intensity target: square': () => intensityTargetPreset('intensity_square', 'square'),
   'Amplitude ramp: low → high frequency': () => amplitudePreset(
-    makeLinearAmplitudeRamp('up'),
+    makeLinearAmplitudeRamp('up', state.lineCount),
     'Amplitude ramp, low to high frequency',
     'This emphasizes the high-frequency side of the comb and gives an asymmetric spectral envelope.'
   ),
   'Amplitude ramp: high → low frequency': () => amplitudePreset(
-    makeLinearAmplitudeRamp('down'),
+    makeLinearAmplitudeRamp('down', state.lineCount),
     'Amplitude ramp, high to low frequency',
     'This emphasizes the low-frequency side of the comb and gives the opposite spectral tilt.'
   ),
   'Amplitude chirp: center weighted': () => amplitudePreset(
-    makeCenterWeightedAmplitudes(1.05),
+    makeCenterWeightedAmplitudes(null, state.lineCount),
     'Center-weighted amplitude chirp',
     'Most power sits near the carrier; the time waveform broadens and sidelobes are reduced.'
   ),
   'Amplitude chirp: edge weighted': () => amplitudePreset(
-    makeEdgeWeightedAmplitudes(1.2),
+    makeEdgeWeightedAmplitudes(1.2, state.lineCount),
     'Edge-weighted amplitude chirp',
     'Most power sits at the comb edges, which tends to sharpen features and increase ripple.'
   ),
   'Amplitude notch: weak center lines': () => amplitudePreset(
-    makeCenterNotchAmplitudes(),
+    makeCenterNotchAmplitudes(state.lineCount),
     'Center-notched amplitude chirp',
     'The center lines are suppressed, producing a split-spectrum example with a more structured intensity envelope.'
   ),
   'Amplitude comb: alternating strong / weak': () => amplitudePreset(
-    makeAlternatingAmplitudePattern(),
+    makeAlternatingAmplitudePattern(state.lineCount),
     'Alternating strong/weak amplitudes',
     'Every other line is suppressed, so the intensity envelope visibly changes periodic structure.'
   ),
   'Gaussian-like line amplitudes': () => {
-    const { magnitudes, phasesDeg } = makeGaussianLinePreset(1.35);
+    const sigma = Math.max(1.35, 0.24 * state.lineCount);
+    const { magnitudes, phasesDeg } = makeGaussianLinePreset(sigma, state.lineCount);
     return {
       magnitudes,
       phasesDeg,
-      note: '<strong>Gaussian-like spectrum:</strong> tapered line amplitudes reduce sidelobes compared with a flat spectrum.',
+      note: `<strong>Gaussian-like spectrum:</strong> tapered line amplitudes reduce sidelobes compared with a flat ${state.lineCount}-line spectrum.`,
     };
   },
   'Double-pulse-like intensity': () => {
-    const { magnitudes, phasesDeg } = makeDoublePulsePreset(0.35);
+    const { magnitudes, phasesDeg } = makeDoublePulsePreset(0.35, state.lineCount);
     return {
       magnitudes,
       phasesDeg,
@@ -596,16 +622,17 @@ const presetFunctions = {
     };
   },
   'Alternating 0 / π phase': () => ({
-    magnitudes: Array(N_LINES).fill(1),
-    phasesDeg: lineIndices.map(k => k % 2 === 0 ? 0 : 180),
+    magnitudes: Array(state.lineCount).fill(1),
+    phasesDeg: lineIndices(state.lineCount).map(k => k % 2 === 0 ? 0 : 180),
     note: '<strong>Alternating 0/π phase:</strong> flips the sign of alternating spectral lines, producing a strongly reshaped periodic envelope.',
   }),
   'Random amplitudes and phases': () => ({
-    magnitudes: lineIndices.map(() => cleanNumber(0.45 + Math.random() * 0.75, 4)),
-    phasesDeg: lineIndices.map(() => cleanNumber(-180 + Math.random() * 360, 3)),
+    magnitudes: lineIndices(state.lineCount).map(() => cleanNumber(0.45 + Math.random() * 0.75, 4)),
+    phasesDeg: lineIndices(state.lineCount).map(() => cleanNumber(-180 + Math.random() * 360, 3)),
     note: '<strong>Random amplitudes and phases:</strong> a quick way to explore arbitrary line-by-line settings.',
   }),
 };
+
 function buildLineControls() {
   const table = $('lineTable');
   table.innerHTML = `
@@ -618,9 +645,10 @@ function buildLineControls() {
     </div>
   `;
 
-  for (let k = 0; k < N_LINES; k++) {
+  for (let k = 0; k < MAX_LINES; k++) {
     const row = document.createElement('div');
     row.className = 'line-row';
+    row.id = `lineRow${k}`;
     row.innerHTML = `
       <span class="line-index">${k}</span>
       <input id="ampRange${k}" type="range" min="0" max="1.5" step="0.01" value="1" aria-label="Amplitude slider for line ${k}" />
@@ -640,7 +668,6 @@ function buildLineControls() {
       state.targetKind = null;
       scheduleUpdate();
     });
-    ampRange.addEventListener('change', () => { state.targetKind = null; scheduleUpdate(); });
     ampNumber.addEventListener('change', () => {
       const amp = clamp(parseNumber(ampNumber.value, state.amplitudes[k]), 0, 5);
       ampNumber.value = formatAmp(amp);
@@ -654,7 +681,6 @@ function buildLineControls() {
       state.targetKind = null;
       scheduleUpdate();
     });
-    phaseRange.addEventListener('change', () => { state.targetKind = null; scheduleUpdate(); });
     phaseNumber.addEventListener('change', () => {
       const phase = parseNumber(phaseNumber.value, state.phasesDeg[k]);
       phaseNumber.value = formatPhase(phase);
@@ -678,16 +704,19 @@ function buildPresetMenu() {
 function attachGlobalEvents() {
   $('centerWavelengthInput').addEventListener('change', scheduleUpdate);
   $('spacingSelect').addEventListener('change', scheduleUpdate);
+  $('lineCountSelect').addEventListener('change', () => {
+    state.lineCount = clamp(parseNumber($('lineCountSelect').value, state.lineCount), 4, MAX_LINES);
+    applyStateToControls();
+    scheduleUpdate();
+  });
   $('periodsRange').addEventListener('input', () => {
     $('periodsOutput').value = $('periodsRange').value;
     scheduleUpdate();
   });
-  $('periodsRange').addEventListener('change', scheduleUpdate);
   $('phasorRange').addEventListener('input', () => {
     $('phasorOutput').value = Number($('phasorRange').value).toFixed(2);
     scheduleUpdate();
   });
-  $('phasorRange').addEventListener('change', scheduleUpdate);
   $('normalizeCheckbox').addEventListener('change', scheduleUpdate);
   $('targetCheckbox').addEventListener('change', scheduleUpdate);
 
@@ -704,11 +733,12 @@ function attachGlobalEvents() {
   $('exportButton').addEventListener('click', () => {
     readLineControls();
     const payload = {
-      description: '8-line optical pulse shaping settings',
+      description: `${state.lineCount}-line optical pulse shaping settings`,
+      lineCount: state.lineCount,
       centerWavelengthNm: clamp(parseNumber($('centerWavelengthInput').value, DEFAULT_CENTER_WAVELENGTH_NM), 1200, 1700),
       spacingGhz: parseNumber($('spacingSelect').value, 200),
-      amplitudes: state.amplitudes.map(v => cleanNumber(v, 6)),
-      phasesDeg: state.phasesDeg.map(v => cleanNumber(v, 4)),
+      amplitudes: activeAmplitudes(state.lineCount).map(v => cleanNumber(v, 6)),
+      phasesDeg: activePhases(state.lineCount).map(v => cleanNumber(v, 4)),
       targetKind: state.targetKind,
       targetType: state.targetType,
       targetLabel: state.targetLabel,
@@ -727,6 +757,7 @@ function init() {
   buildLineControls();
   buildPresetMenu();
   attachGlobalEvents();
+  applyStateToControls();
   setValues(presetFunctions['Transform-limited pulse train']());
 }
 

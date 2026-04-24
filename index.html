@@ -4,22 +4,23 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Interactive Optical Pulse Shaping</title>
-  <meta name="description" content="Line-by-line pulse shaping demo with 8 equal-frequency-spaced CW laser lines near 1550 nm." />
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <meta name="description" content="Line-by-line pulse shaping demo with up to 16 equal-frequency-spaced CW laser lines near 1550 nm." />
+  <link rel="stylesheet" href="styles.css?v=7" />
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <script defer src="script.js?v=6"></script>
+  <script defer src="script.js?v=7"></script>
 </head>
 <body>
   <header class="hero">
     <div>
       <p class="eyebrow">Integrated photonics · optical arbitrary waveform generation</p>
-      <h1>Interactive optical pulse shaping with 8 CW laser lines</h1>
+      <h1>Interactive optical pulse shaping with up to 16 CW laser lines</h1>
       <p class="lede">
-        Adjust the amplitude and phase of eight equal-frequency-spaced laser inputs. The app synthesizes
+        Adjust the amplitude and phase of equal-frequency-spaced laser inputs. The app synthesizes
         the periodic intensity envelope and a 3D phasor view of each complex spectral coefficient.
       </p>
     </div>
     <div class="summary-card" id="summaryCard">
+      <div class="summary-row"><span>Active lines</span><strong id="lineCountText">8</strong></div>
       <div class="summary-row"><span>Center wavelength</span><strong id="centerWavelengthText">1550.0 nm</strong></div>
       <div class="summary-row"><span>Frequency spacing</span><strong id="spacingText">200 GHz</strong></div>
       <div class="summary-row"><span>Repetition period</span><strong id="periodText">5.000 ps</strong></div>
@@ -52,12 +53,22 @@
               </select>
             </label>
 
+            <label class="field">
+              <span>Number of lines</span>
+              <select id="lineCountSelect">
+                <option value="4">4</option>
+                <option value="8" selected>8</option>
+                <option value="12">12</option>
+                <option value="16">16</option>
+              </select>
+            </label>
+
             <label class="field range-field">
               <span>Periods shown: <output id="periodsOutput">3</output></span>
               <input id="periodsRange" type="range" min="1" max="8" step="1" value="3" />
             </label>
 
-            <label class="field range-field">
+            <label class="field range-field global-span-2">
               <span>3D phasor time: <output id="phasorOutput">0.00</output>T</span>
               <input id="phasorRange" type="range" min="0" max="1" step="0.01" value="0" />
             </label>
@@ -122,8 +133,8 @@
         A phase of 0 and 2π therefore represents the same point on the circle.
       </p>
       <p>
-        With only eight lines, discontinuous targets cannot be exact. Square and sawtooth targets show finite-bandwidth rounding and ringing,
-        while triangle-like targets are usually cleaner because their Fourier coefficients decay faster.
+        With only a limited number of lines, discontinuous targets cannot be exact. Square and sawtooth targets show finite-bandwidth rounding and ringing,
+        while triangle-like targets are usually cleaner because their Fourier coefficients decay faster. Increasing the active line count from 8 toward 16 generally improves the approximation.
       </p>
     </section>
   </main>
