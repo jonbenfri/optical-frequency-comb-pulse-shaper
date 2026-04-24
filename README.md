@@ -34,3 +34,7 @@ The app synthesizes the complex optical envelope using equal frequency spacing. 
 ## Interaction notes
 
 The amplitude, phase, time-window, and phasor-time sliders update the plots live while dragging. The JavaScript uses `requestAnimationFrame` to coalesce rapid slider events, so the app redraws at most once per browser animation frame instead of attempting a full redraw for every raw input event.
+
+## v7 layout note
+
+The interpretation notes now sit directly below the waveform plot inside the plot column. The preset panel and waveform panel have colored visual emphasis, and the waveform plot uses consistent colors for synthesized intensity, preset target, and phasor snapshot time.

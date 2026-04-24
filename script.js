@@ -4,6 +4,12 @@ const C0 = 299_792_458.0;
 const MAX_LINES = 16;
 const DEFAULT_LINE_COUNT = 8;
 const DEFAULT_CENTER_WAVELENGTH_NM = 1550.0;
+const PLOT_COLORS = {
+  intensity: '#0f9f8e',
+  target: '#f59e0b',
+  snapshot: '#ef4444',
+  spectrum: '#8a5cf6',
+};
 
 const state = {
   lineCount: DEFAULT_LINE_COUNT,
@@ -13,6 +19,7 @@ const state = {
   targetType: null,
   targetLabel: '',
   targetRmse: null,
+  presetFamily: 'manual',
   batch: false,
 };
 
@@ -231,6 +238,35 @@ function getGlobalControls() {
   };
 }
 
+
+function presetFamilyLabel(family) {
+  switch (family) {
+    case 'intensity': return 'intensity target';
+    case 'amplitude': return 'amplitude shaping';
+    case 'phase': return 'phase/time';
+    case 'random': return 'random';
+    case 'manual':
+    default: return 'manual';
+  }
+}
+
+function updatePresetBadge(family = state.presetFamily) {
+  const badge = $('presetBadge');
+  if (!badge) return;
+  const cleanFamily = ['intensity', 'amplitude', 'phase', 'random', 'manual'].includes(family) ? family : 'manual';
+  badge.className = `focus-badge preset-badge family-${cleanFamily}`;
+  badge.textContent = presetFamilyLabel(cleanFamily);
+}
+
+function markManualEdit() {
+  state.targetKind = null;
+  state.targetType = null;
+  state.targetLabel = '';
+  state.targetRmse = null;
+  state.presetFamily = 'manual';
+  updatePresetBadge('manual');
+}
+
 function applyStateToControls() {
   state.batch = true;
   $('lineCountSelect').value = String(state.lineCount);
@@ -296,7 +332,7 @@ function makeSpectrumPlot(synth, controls) {
     text,
     textposition: 'outside',
     hovertemplate: 'Offset %{x:.1f} GHz<br>Amplitude %{y:.3f}<br>%{text}<extra></extra>',
-    marker: { line: { width: 1 } },
+    marker: { color: PLOT_COLORS.spectrum, line: { width: 1 } },
   };
   const layout = {
     margin: { l: 58, r: 16, t: 20, b: 62 },
@@ -403,7 +439,7 @@ function makeTimePlot(synth, controls) {
     x: synth.tPs,
     y: intensityPlot,
     name: controls.normalizePlots ? 'Normalized intensity |E(t)|²' : 'Intensity |E(t)|²',
-    line: { width: 3 },
+    line: { width: 3, color: PLOT_COLORS.intensity },
     hovertemplate: 't = %{x:.3f} ps<br>%{y:.4g}<extra></extra>',
   }];
 
@@ -415,7 +451,7 @@ function makeTimePlot(synth, controls) {
       x: synth.tPs,
       y: targetPlot,
       name: `Target: ${state.targetLabel}`,
-      line: { width: 2.5, dash: 'dot' },
+      line: { width: 2.5, dash: 'dot', color: PLOT_COLORS.target },
       hovertemplate: 't = %{x:.3f} ps<br>target %{y:.4g}<extra></extra>',
     });
   }
@@ -429,7 +465,7 @@ function makeTimePlot(synth, controls) {
     x: [displayTime, displayTime],
     y: controls.normalizePlots ? [-0.08, 1.08] : [0, Math.max(...synth.intensity) * 1.05],
     name: 'phasor snapshot time',
-    line: { width: 1.5, dash: 'dashdot' },
+    line: { width: 1.5, dash: 'dashdot', color: PLOT_COLORS.snapshot },
     hoverinfo: 'skip',
   });
 
@@ -490,7 +526,7 @@ function updatePlots() {
   updateSummary(controls.lineCount, controls.centerWavelengthNm, controls.spacingGhz, synth.periodPs, synth.wavelengthsNm);
 }
 
-function setValues({ magnitudes, phasesDeg, note = '', targetKind = null, targetType = null, targetLabel = '' }) {
+function setValues({ magnitudes, phasesDeg, note = '', targetKind = null, targetType = null, targetLabel = '', family = 'manual' }) {
   for (let k = 0; k < MAX_LINES; k++) {
     state.amplitudes[k] = k < magnitudes.length ? clamp(cleanNumber(magnitudes[k], 6), 0, 5) : 0;
     state.phasesDeg[k] = k < phasesDeg.length ? cleanNumber(phasesDeg[k], 4) : 0;
@@ -499,6 +535,8 @@ function setValues({ magnitudes, phasesDeg, note = '', targetKind = null, target
   state.targetType = targetType;
   state.targetLabel = targetLabel;
   state.targetRmse = null;
+  state.presetFamily = family;
+  updatePresetBadge(family);
   if (note) $('presetNote').innerHTML = note;
   applyStateToControls();
   updatePlots();
@@ -509,6 +547,7 @@ function amplitudePreset(magnitudes, label, extraNote = '') {
     magnitudes: magnitudes.map(v => cleanNumber(v, 6)),
     phasesDeg: Array(magnitudes.length).fill(0),
     note: ('<strong>' + label + ':</strong> flat spectral phase with shaped line amplitudes. ' + extraNote).trim(),
+    family: 'amplitude',
   };
 }
 
@@ -556,6 +595,7 @@ function intensityTargetPreset(kind, label) {
     targetKind: kind,
     targetType: 'intensity',
     targetLabel: `${label} intensity target`,
+    family: 'intensity',
   };
 }
 
@@ -564,11 +604,13 @@ const presetFunctions = {
     magnitudes: Array(state.lineCount).fill(1),
     phasesDeg: Array(state.lineCount).fill(0),
     note: `<strong>Transform-limited:</strong> equal amplitudes and flat spectral phase. Produces the shortest pulse train for this flat ${state.lineCount}-line spectrum.`,
+    family: 'amplitude',
   }),
   'Time shift: linear phase ramp': () => ({
     magnitudes: Array(state.lineCount).fill(1),
     phasesDeg: lineIndices(state.lineCount).map(k => -360 * k * 0.25),
     note: '<strong>Linear phase ramp:</strong> shifts the waveform in time while preserving the intensity shape.',
+    family: 'phase',
   }),
   'Intensity target: sawtooth': () => intensityTargetPreset('intensity_saw', 'sawtooth'),
   'Intensity target: reverse sawtooth': () => intensityTargetPreset('intensity_reverse_saw', 'reverse sawtooth'),
@@ -611,6 +653,7 @@ const presetFunctions = {
       magnitudes,
       phasesDeg,
       note: `<strong>Gaussian-like spectrum:</strong> tapered line amplitudes reduce sidelobes compared with a flat ${state.lineCount}-line spectrum.`,
+      family: 'amplitude',
     };
   },
   'Double-pulse-like intensity': () => {
@@ -619,17 +662,20 @@ const presetFunctions = {
       magnitudes,
       phasesDeg,
       note: '<strong>Double-pulse-like intensity:</strong> spectral interference factor approximates two pulses separated by about 0.35T.',
+      family: 'phase',
     };
   },
   'Alternating 0 / π phase': () => ({
     magnitudes: Array(state.lineCount).fill(1),
     phasesDeg: lineIndices(state.lineCount).map(k => k % 2 === 0 ? 0 : 180),
     note: '<strong>Alternating 0/π phase:</strong> flips the sign of alternating spectral lines, producing a strongly reshaped periodic envelope.',
+    family: 'phase',
   }),
   'Random amplitudes and phases': () => ({
     magnitudes: lineIndices(state.lineCount).map(() => cleanNumber(0.45 + Math.random() * 0.75, 4)),
     phasesDeg: lineIndices(state.lineCount).map(() => cleanNumber(-180 + Math.random() * 360, 3)),
     note: '<strong>Random amplitudes and phases:</strong> a quick way to explore arbitrary line-by-line settings.',
+    family: 'random',
   }),
 };
 
@@ -665,30 +711,39 @@ function buildLineControls() {
 
     ampRange.addEventListener('input', () => {
       ampNumber.value = formatAmp(ampRange.value);
-      state.targetKind = null;
+      markManualEdit();
       scheduleUpdate();
     });
     ampNumber.addEventListener('change', () => {
       const amp = clamp(parseNumber(ampNumber.value, state.amplitudes[k]), 0, 5);
       ampNumber.value = formatAmp(amp);
       ampRange.value = String(clamp(amp, 0, 1.5));
-      state.targetKind = null;
+      markManualEdit();
       scheduleUpdate();
     });
 
     phaseRange.addEventListener('input', () => {
       phaseNumber.value = formatPhase(phaseRange.value);
-      state.targetKind = null;
+      markManualEdit();
       scheduleUpdate();
     });
     phaseNumber.addEventListener('change', () => {
       const phase = parseNumber(phaseNumber.value, state.phasesDeg[k]);
       phaseNumber.value = formatPhase(phase);
       phaseRange.value = String(wrapPhaseToSliderRange(phase));
-      state.targetKind = null;
+      markManualEdit();
       scheduleUpdate();
     });
   }
+}
+
+
+function presetFamilyForName(name) {
+  if (name.startsWith('Intensity target:')) return 'intensity';
+  if (name.startsWith('Amplitude ') || name.startsWith('Gaussian-like') || name.startsWith('Transform-limited')) return 'amplitude';
+  if (name.includes('phase') || name.includes('Time shift') || name.startsWith('Double-pulse')) return 'phase';
+  if (name.startsWith('Random')) return 'random';
+  return 'manual';
 }
 
 function buildPresetMenu() {
@@ -720,6 +775,10 @@ function attachGlobalEvents() {
   $('normalizeCheckbox').addEventListener('change', scheduleUpdate);
   $('targetCheckbox').addEventListener('change', scheduleUpdate);
 
+  $('presetSelect').addEventListener('change', () => {
+    updatePresetBadge(presetFamilyForName($('presetSelect').value));
+  });
+
   $('applyPresetButton').addEventListener('click', () => {
     const preset = presetFunctions[$('presetSelect').value]();
     setValues(preset);
@@ -742,6 +801,7 @@ function attachGlobalEvents() {
       targetKind: state.targetKind,
       targetType: state.targetType,
       targetLabel: state.targetLabel,
+      presetFamily: state.presetFamily,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);

@@ -333,3 +333,92 @@ footer {
   .plot-phasor { min-height: 360px; }
   .plot-large { min-height: 380px; }
 }
+
+/* v7 emphasis: make the preset controls and waveform output visually easy to find. */
+:root {
+  --preset-accent: #8a5cf6;
+  --preset-soft: #f4efff;
+  --waveform-accent: #0f9f8e;
+  --waveform-soft: #ecfffb;
+  --target-accent: #f59e0b;
+  --snapshot-accent: #ef4444;
+}
+
+.focus-panel {
+  position: relative;
+  overflow: visible;
+}
+
+.focus-panel::before {
+  content: "";
+  position: absolute;
+  inset: 12px auto 12px 0;
+  width: 5px;
+  border-radius: 999px;
+}
+
+.focus-panel-presets {
+  border-color: rgba(138, 92, 246, 0.34);
+  background: linear-gradient(135deg, rgba(244, 239, 255, 0.98), rgba(255, 255, 255, 0.96) 54%);
+}
+
+.focus-panel-presets::before { background: var(--preset-accent); }
+
+.focus-panel-waveform {
+  border-color: rgba(15, 159, 142, 0.34);
+  background: linear-gradient(135deg, rgba(236, 255, 251, 0.98), rgba(255, 255, 255, 0.96) 58%);
+}
+
+.focus-panel-waveform::before { background: var(--waveform-accent); }
+
+.focus-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  border: 1px solid transparent;
+}
+
+.preset-badge { background: #eef2ff; color: #334155; border-color: #dbe2ef; }
+.preset-badge.family-intensity { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+.preset-badge.family-amplitude { background: #f4efff; color: #5b21b6; border-color: #ddd6fe; }
+.preset-badge.family-phase { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+.preset-badge.family-random { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+.preset-badge.family-manual { background: #ecfeff; color: #0e7490; border-color: #a5f3fc; }
+
+.preset-panel .note {
+  border-left: 3px solid var(--preset-accent);
+  padding-left: 10px;
+}
+
+.waveform-panel h3::after {
+  content: "intensity |E(t)|²";
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--waveform-soft);
+  color: #0f766e;
+  border: 1px solid rgba(15, 159, 142, 0.28);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.explanation-panel.wide {
+  grid-column: 1 / -1;
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.82);
+  border-style: dashed;
+}
+
+@media (max-width: 680px) {
+  .global-span-2 { grid-column: auto; }
+  .waveform-panel h3::after,
+  .focus-badge { margin-left: 0; margin-top: 5px; }
+}
