@@ -1,5 +1,7 @@
 # Interactive Optical Pulse Shaping
 
+**Live demo:** https://jonbenfri.github.io/optical-frequency-comb-pulse-shaper/
+
 Static GitHub Pages app for demonstrating line-by-line optical pulse shaping with 8 equal-frequency-spaced CW laser inputs.
 
 ## Features
@@ -9,7 +11,7 @@ Static GitHub Pages app for demonstrating line-by-line optical pulse shaping wit
 - Editable amplitude and phase controls for every line
 - Plotly-based input spectrum, 3D phasor view, and time-domain intensity envelope
 - Intensity-focused presets for sawtooth-like, reverse-sawtooth-like, triangle-like, and square-like targets
-- Chirped spectral-phase presets
+- Amplitude-shaping presets: ramped, center-weighted, edge-weighted, notched, and alternating strong/weak line amplitudes
 - Compact horizontal desktop layout for seeing controls and plots at once
 - JSON export for the current line settings
 

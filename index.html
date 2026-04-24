@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Interactive Optical Pulse Shaping</title>
   <meta name="description" content="Line-by-line pulse shaping demo with 8 equal-frequency-spaced CW laser lines near 1550 nm." />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=4" />
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <script defer src="script.js"></script>
+  <script defer src="script.js?v=4"></script>
 </head>
 <body>
   <header class="hero">
@@ -16,7 +16,7 @@
       <h1>Interactive optical pulse shaping with 8 CW laser lines</h1>
       <p class="lede">
         Adjust the amplitude and phase of eight equal-frequency-spaced laser inputs. The app synthesizes
-        the periodic complex-envelope intensity and a 3D phasor view of the line phases.
+        the periodic intensity envelope and a 3D phasor view of each complex spectral coefficient.
       </p>
     </div>
     <div class="summary-card" id="summaryCard">
@@ -72,7 +72,7 @@
         <section class="panel preset-panel" aria-labelledby="presets-heading">
           <div class="section-heading compact-heading">
             <h2 id="presets-heading">Presets</h2>
-            <p>Chirp presets adjust spectral phase. Shape presets fit the directly measurable intensity <span class="math">|E(t)|²</span>.</p>
+            <p>Shape presets fit the directly measurable intensity <span class="math">|E(t)|²</span>. Amplitude presets reshape the spectral magnitudes while keeping phase flat.</p>
           </div>
           <div class="preset-row">
             <select id="presetSelect" aria-label="Preset selection"></select>
@@ -81,6 +81,7 @@
             <button id="exportButton" type="button" class="secondary">Export</button>
           </div>
           <p id="presetNote" class="note">No preset has been applied yet.</p>
+          <p id="plotStatus" class="status" role="status" aria-live="polite"></p>
         </section>
 
         <section class="panel line-panel" aria-labelledby="line-controls-heading">
@@ -114,6 +115,11 @@
       <p>
         The solid curve is the physical intensity envelope <span class="math">|E(t)|²</span>. For intensity-target presets,
         the dotted curve shows the intended normalized intensity profile.
+      </p>
+      <p>
+        In the 3D phasor plot, each laser line is drawn as a complex coefficient <span class="math">A exp(iφ)</span> at its frequency offset.
+        The in-phase axis is the real projection <span class="math">A cos(φ)</span>, and the quadrature axis is the imaginary projection <span class="math">A sin(φ)</span>.
+        A phase of 0 and 2π therefore represents the same point on the circle.
       </p>
       <p>
         With only eight lines, discontinuous targets cannot be exact. Square and sawtooth targets show finite-bandwidth rounding and ringing,

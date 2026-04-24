@@ -433,6 +433,13 @@ function scheduleUpdate() {
 }
 
 function updatePlots() {
+  if (typeof Plotly === 'undefined') {
+    const status = $('plotStatus');
+    if (status) status.textContent = 'Plotly did not load. Check the network connection or CDN access.';
+    return;
+  }
+  const status = $('plotStatus');
+  if (status) status.textContent = '';
   readLineControls();
   const controls = getGlobalControls();
   $('periodsOutput').value = controls.nPeriods;
@@ -459,6 +466,45 @@ function setValues({ magnitudes, phasesDeg, note = '', targetKind = null, target
   updatePlots();
 }
 
+function amplitudePreset(magnitudes, label, extraNote = '') {
+  return {
+    magnitudes: magnitudes.map(v => cleanNumber(v, 6)),
+    phasesDeg: Array(N_LINES).fill(0),
+    note: ('<strong>' + label + ':</strong> flat spectral phase with shaped line amplitudes. ' + extraNote).trim(),
+  };
+}
+
+function makeLinearAmplitudeRamp(direction = 'up') {
+  const lo = 0.18;
+  const hi = 1.0;
+  let magnitudes = lineIndices.map(k => lo + (hi - lo) * k / (N_LINES - 1));
+  if (direction === 'down') magnitudes = magnitudes.slice().reverse();
+  return magnitudes;
+}
+
+function makeCenterWeightedAmplitudes(sigmaLines = 1.05) {
+  let magnitudes = centeredIndices.map(x => Math.exp(-0.5 * (x / sigmaLines) ** 2));
+  const maxVal = Math.max(...magnitudes);
+  return magnitudes.map(v => v / maxVal);
+}
+
+function makeEdgeWeightedAmplitudes(power = 1.2) {
+  const maxAbs = Math.max(...centeredIndices.map(Math.abs));
+  return centeredIndices.map(x => 0.18 + 0.82 * (Math.abs(x) / maxAbs) ** power);
+}
+
+function makeCenterNotchAmplitudes() {
+  const maxAbs = Math.max(...centeredIndices.map(Math.abs));
+  return centeredIndices.map(x => {
+    const d = Math.abs(x) / maxAbs;
+    return 0.12 + 0.88 * (1 - Math.exp(-4.2 * d ** 2));
+  });
+}
+
+function makeAlternatingAmplitudePattern() {
+  return lineIndices.map(k => (k % 2 === 0 ? 1.0 : 0.22));
+}
+
 function intensityTargetPreset(kind, label) {
   const coeff = coefficientsForTarget(kind, 'intensity');
   const { magnitudes, phasesDeg } = coeffToMagnitudePhase(coeff);
@@ -483,40 +529,40 @@ const presetFunctions = {
     phasesDeg: lineIndices.map(k => -360 * k * 0.25),
     note: '<strong>Linear phase ramp:</strong> shifts the waveform in time while preserving the intensity shape.',
   }),
-  'Chirped: quadratic spectral phase': () => {
-    const norm = Math.max(...centeredIndices.map(Math.abs));
-    let phasesDeg = centeredIndices.map(x => 170 * (x / norm) ** 2);
-    const avg = mean(phasesDeg);
-    phasesDeg = phasesDeg.map(v => v - avg);
-    return {
-      magnitudes: Array(N_LINES).fill(1),
-      phasesDeg,
-      note: '<strong>Chirped spectral phase:</strong> quadratic spectral phase, analogous to group-delay dispersion.',
-    };
-  },
-  'Chirped: strong quadratic spectral phase': () => {
-    const norm = Math.max(...centeredIndices.map(Math.abs));
-    let phasesDeg = centeredIndices.map(x => 380 * (x / norm) ** 2);
-    const avg = mean(phasesDeg);
-    phasesDeg = phasesDeg.map(v => v - avg);
-    return {
-      magnitudes: Array(N_LINES).fill(1),
-      phasesDeg,
-      note: '<strong>Strong chirped spectral phase:</strong> larger quadratic phase excursion for stronger temporal spreading.',
-    };
-  },
-  'Chirped: cubic / asymmetric phase': () => {
-    const norm = Math.max(...centeredIndices.map(Math.abs));
-    return {
-      magnitudes: Array(N_LINES).fill(1),
-      phasesDeg: centeredIndices.map(x => 260 * (x / norm) ** 3),
-      note: '<strong>Cubic / asymmetric chirp:</strong> third-order spectral phase that makes the intensity envelope more asymmetric.',
-    };
-  },
   'Intensity target: sawtooth': () => intensityTargetPreset('intensity_saw', 'sawtooth'),
   'Intensity target: reverse sawtooth': () => intensityTargetPreset('intensity_reverse_saw', 'reverse sawtooth'),
   'Intensity target: triangle': () => intensityTargetPreset('intensity_triangle', 'triangle'),
   'Intensity target: square': () => intensityTargetPreset('intensity_square', 'square'),
+  'Amplitude ramp: low → high frequency': () => amplitudePreset(
+    makeLinearAmplitudeRamp('up'),
+    'Amplitude ramp, low to high frequency',
+    'This emphasizes the high-frequency side of the comb and gives an asymmetric spectral envelope.'
+  ),
+  'Amplitude ramp: high → low frequency': () => amplitudePreset(
+    makeLinearAmplitudeRamp('down'),
+    'Amplitude ramp, high to low frequency',
+    'This emphasizes the low-frequency side of the comb and gives the opposite spectral tilt.'
+  ),
+  'Amplitude chirp: center weighted': () => amplitudePreset(
+    makeCenterWeightedAmplitudes(1.05),
+    'Center-weighted amplitude chirp',
+    'Most power sits near the carrier; the time waveform broadens and sidelobes are reduced.'
+  ),
+  'Amplitude chirp: edge weighted': () => amplitudePreset(
+    makeEdgeWeightedAmplitudes(1.2),
+    'Edge-weighted amplitude chirp',
+    'Most power sits at the comb edges, which tends to sharpen features and increase ripple.'
+  ),
+  'Amplitude notch: weak center lines': () => amplitudePreset(
+    makeCenterNotchAmplitudes(),
+    'Center-notched amplitude chirp',
+    'The center lines are suppressed, producing a split-spectrum example with a more structured intensity envelope.'
+  ),
+  'Amplitude comb: alternating strong / weak': () => amplitudePreset(
+    makeAlternatingAmplitudePattern(),
+    'Alternating strong/weak amplitudes',
+    'Every other line is suppressed, so the intensity envelope visibly changes periodic structure.'
+  ),
   'Gaussian-like line amplitudes': () => {
     const { magnitudes, phasesDeg } = makeGaussianLinePreset(1.35);
     return {
@@ -525,7 +571,7 @@ const presetFunctions = {
       note: '<strong>Gaussian-like spectrum:</strong> tapered line amplitudes reduce sidelobes compared with a flat spectrum.',
     };
   },
-  'Double-pulse-like field': () => {
+  'Double-pulse-like intensity': () => {
     const { magnitudes, phasesDeg } = makeDoublePulsePreset(0.35);
     return {
       magnitudes,
@@ -544,7 +590,6 @@ const presetFunctions = {
     note: '<strong>Random amplitudes and phases:</strong> a quick way to explore arbitrary line-by-line settings.',
   }),
 };
-
 function buildLineControls() {
   const table = $('lineTable');
   table.innerHTML = `
